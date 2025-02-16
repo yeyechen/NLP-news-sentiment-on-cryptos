@@ -1,2 +1,4 @@
 This log is for for debugging, tracking training progress, and recording errors.
 Also for the MFIN7036 Blog Post.
+
+this is a message; testing testing
