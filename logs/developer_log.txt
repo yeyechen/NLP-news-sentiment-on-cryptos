@@ -18,3 +18,26 @@ installation:
 pip install clickhouse-driver    # Native protocol (recommended for performance)
 pip install clickhouse-connect   # HTTP/HTTPS protocol
 
+(2025.02.22, Daniel)
+## Testing for FinBERT
+- tested for 10 news from our dataset by inputting the description of each news for sentiment analysis by FinBERT
+- Generated sentiment analysis values columns: finbert_pos, finbert_neg, finbert_neu, finbert_sentiment, finbert_score
+- finbert_pos, finbert_neg, finbert_neu are combined to have a score of 1
+- finbert_score is calculated with: finbert_pos - finbert_neg
+- finbert_score is in a range from -1 to 1 where -1 is extreme negative, 0 is netural, and 1 is extreme positive sentiment
+
+
+
+ON SERVER 03 :
+python3 --version   # checking python version on server, OUTPUT: Python 3.10.12
+
+Then getting into SERVER 01 for checking the dataset: 
+
+clickhouse-client --host=chenlin01.fbe.hku.hk --user=mfin7037_best_students
+
+use tiingo
+show tables     # OUTPUT: news
+
+
+Back into SERVER 03:
+nvidia -smi     # check gpu and cuda versions, OUTPUT: NVIDIA-SMI 545.23.06              Driver Version: 545.23.06    CUDA Version: 12.3
