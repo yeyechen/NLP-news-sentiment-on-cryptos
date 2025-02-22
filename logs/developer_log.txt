@@ -1,4 +1,20 @@
 This log is for for debugging, tracking training progress, and recording errors.
 Also for the MFIN7036 Blog Post.
 
-this is a message; testing testing
+Sentiment Analysis:
+
+(2025.02.22, Yeye)
+The server is a clickhouse DBMS. Difference between clickhouse and traditional MySQL server:
+
+"The main difference between ClickHouse and MySQL 
+is that ClickHouse is a columnar database optimized 
+for high-performance analytics and large-scale 
+data processing, while MySQL is a row-based 
+relational database designed for transactional 
+processing and smaller-scale applications."
+
+use clickhouse_driver to connect to the server.
+installation: 
+pip install clickhouse-driver    # Native protocol (recommended for performance)
+pip install clickhouse-connect   # HTTP/HTTPS protocol
+
