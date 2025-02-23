@@ -1,4 +1,67 @@
 This log is for for debugging, tracking training progress, and recording errors.
 Also for the MFIN7036 Blog Post.
 
-this is a message; testing testing
+Sentiment Analysis:
+
+(2025.02.22, Yeye)
+The server is a clickhouse DBMS. Difference between clickhouse and traditional MySQL server:
+
+"The main difference between ClickHouse and MySQL 
+is that ClickHouse is a columnar database optimized 
+for high-performance analytics and large-scale 
+data processing, while MySQL is a row-based 
+relational database designed for transactional 
+processing and smaller-scale applications."
+
+use clickhouse_driver to connect to the server.
+installation: 
+pip install clickhouse-driver    # Native protocol (recommended for performance)
+pip install clickhouse-connect   # HTTP/HTTPS protocol
+
+(2025.02.22, Daniel)
+## Testing for FinBERT
+- tested for 10 news from our dataset by inputting the description of each news for sentiment analysis by FinBERT
+- Generated sentiment analysis values columns: finbert_pos, finbert_neg, finbert_neu, finbert_sentiment, finbert_score
+- finbert_pos, finbert_neg, finbert_neu are combined to have a score of 1
+- finbert_score is calculated with: finbert_pos - finbert_neg
+- finbert_score is in a range from -1 to 1 where -1 is extreme negative, 0 is netural, and 1 is extreme positive sentiment
+
+
+
+ON SERVER 03 :
+python3 --version   # checking python version on server, OUTPUT: Python 3.10.12
+
+Then getting into SERVER 01 for checking the dataset: 
+
+clickhouse-client --host=chenlin01.fbe.hku.hk --user=mfin7037_best_students
+
+use tiingo
+show tables     # OUTPUT: news
+
+
+Back into SERVER 03:
+nvidia -smi     # check gpu and cuda versions, OUTPUT: NVIDIA-SMI 545.23.06              Driver Version: 545.23.06    CUDA Version: 12.3
+
+(2025.02.23, Yeye)
+Using pre-trained models from Hugging Face:
+Option 1: use pipeline()
+
+e.g. classifier = pipeline("text-classification", model="ProsusAI/finbert")
+
+Using pipeline() is more convenient and easier to use, it is generally for quick prototyping and simple tasks.
+
+Option 2: use direct model approach
+
+e.g.
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+
+tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
+model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
+
+This approach is more flexible and customizable, and is generally for more complex tasks and production environments.
+We choose this approach because we want to have more control over the model, for performance optimisation and deployment. 
+
+Pre-trained models from Hugging Face:
+1. FinBERT: https://huggingface.co/ProsusAI/finbert
+2. textattack/bert-base-uncased-SST-2: https://huggingface.co/textattack/bert-base-uncased-SST-2
+3. microsoft/deberta-v3-base: https://huggingface.co/microsoft/deberta-v3-bases
