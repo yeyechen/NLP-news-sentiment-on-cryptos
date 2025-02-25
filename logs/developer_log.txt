@@ -65,3 +65,7 @@ Pre-trained models from Hugging Face:
 1. FinBERT: https://huggingface.co/ProsusAI/finbert
 2. textattack/bert-base-uncased-SST-2: https://huggingface.co/textattack/bert-base-uncased-SST-2
 3. microsoft/deberta-v3-base: https://huggingface.co/microsoft/deberta-v3-bases
+
+(2025.02.23, Dou newbie)
+
+
