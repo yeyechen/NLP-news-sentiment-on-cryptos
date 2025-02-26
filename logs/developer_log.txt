@@ -68,4 +68,26 @@ Pre-trained models from Hugging Face:
 
 (2025.02.23, Dou newbie)
 
+Testing: we tested on taking 1 month news data from the dataset to local takes around 25.4 s.
+Since this kind of taking a bit long, we decided to select data before importing to local for analysis.
+
+Data filter:
+ 1. We take news after 2016 since the crypto market only starts big trading volumns after 2017.
+ 2. We then select the desired columns: description, id, publishedDate,tickers_all, title
+ 3. We use the 'supported_tickers.zip' documentation from tiingo to find the tickers in the US market https://www.tiingo.com/documentation/general/overview
+ 4. We select news with all tickers in the following US exchanges: ['NYSE', 'NASDAQ', 'CSE', 'AMEX'] to output US sentiments.
+'''sql
+select distinct(id), description, tickers_all, title, parseDateTimeBestEffort(publishedDate) AS date
+'''
+
+Python Running:
+ 1. We modify the code to use CUDA to run on GPU and start to run our sentiment_analysis.py in our server.
+ 2.
+
+
+(2025.02.26, Daniel)
+I implemented the Roberta model for comparison.
+1. It provided stricter scores on the sentiment analysis: news is positive, under the Finbert model, received a neutral score under Roberta.
+
+
 
