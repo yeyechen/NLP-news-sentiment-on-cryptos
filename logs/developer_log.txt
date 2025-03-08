@@ -88,6 +88,3 @@ Python Running:
 (2025.02.26, Daniel)
 I implemented the Roberta model for comparison.
 1. It provided stricter scores on the sentiment analysis: news is positive, under the Finbert model, received a neutral score under Roberta.
-
-
-
