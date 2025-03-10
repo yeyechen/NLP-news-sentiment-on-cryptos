@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" type="text/css" href="/theme/css/elegant.prod.9e9d5ce754.css" media="screen">
+        <link rel="stylesheet" type="text/css" href="/theme/css/custom.css" media="screen">
+
+        <link rel="dns-prefetch" href="//fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin>
+
+        <meta name="author" content="Non-JaneStreet" />
+
+        <meta property="og:type" content="article" />
+        <meta name="twitter:card" content="summary">
+
+<meta name="keywords" content="Group Non Jane Street, Reflective Report, " />
+
+<meta property="og:title" content="Transforming Sentiment into Market Predictions "/>
+<meta property="og:url" content="/transforming-sentiment-into-market-predictions.html" />
+<meta property="og:description" content="Introduction In our second blog post, we dive deeper into our financial sentiment analysis project, building on the foundation laid in our first blog post. During the first part, we applied sentiment analysis to financial news (title) using Large Language Models such as FinBERT, RoBERTa and DeBERTa. After we got …" />
+<meta property="og:site_name" content="Non-JaneStreet NLP Project" />
+<meta property="og:article:author" content="Non-JaneStreet" />
+<meta property="og:article:published_time" content="2025-03-09T23:59:00+08:00" />
+<meta name="twitter:title" content="Transforming Sentiment into Market Predictions ">
+<meta name="twitter:description" content="Introduction In our second blog post, we dive deeper into our financial sentiment analysis project, building on the foundation laid in our first blog post. During the first part, we applied sentiment analysis to financial news (title) using Large Language Models such as FinBERT, RoBERTa and DeBERTa. After we got …">
+
+        <title>Transforming Sentiment into Market Predictions  · Non-JaneStreet NLP Project
+</title>
+
+
+
+    </head>
+    <body>
+        <div id="content">
+            <div class="navbar navbar-static-top">
+                <div class="navbar-inner">
+                    <div class="container-fluid">
+                        <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+                            <span class="icon-bar"></span>
+                            <span class="icon-bar"></span>
+                            <span class="icon-bar"></span>
+                        </a>
+                        <a class="brand" href="/"><span class=site-name>Non-JaneStreet NLP Project</span></a>
+                        <div class="nav-collapse collapse">
+                            <ul class="nav pull-right top-menu">
+                                <li >
+                                    <a href=
+                                       "/"
+                                    >Home</a>
+                                </li>
+                                <li ><a href="/categories.html">Categories</a></li>
+                                <li ><a href="/tags.html">Tags</a></li>
+                                <li ><a href="/archives.html">Archives</a></li>
+                                <li><form class="navbar-search" action="/search.html" onsubmit="return validateForm(this.elements['q'].value);"> <input type="text" class="search-query" placeholder="Search" name="q" id="tipue_search_input"></form></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="container-fluid">
+                <div class="row-fluid">
+                    <div class="span1"></div>
+                    <div class="span10">
+<article itemscope>
+<div class="row-fluid">
+    <header class="page-header span10 offset2">
+        <h1>
+            <a href="/transforming-sentiment-into-market-predictions.html">
+                Transforming Sentiment into Market Predictions
+            </a>
+        </h1>
+    </header>
+</div>
+
+<div class="row-fluid">
+        <div class="span8 offset2 article-content">
+            
+            <h2>Introduction</h2>
+<p>In our second blog post, we dive deeper into our financial sentiment analysis project, building on the foundation laid in our first blog post. During the first part, we applied sentiment analysis to financial news (title) using Large Language Models such as FinBERT, RoBERTa and DeBERTa. After we got the sentiment scores, our group has focused on aggregating sentiment scores by clustering sectors (e.g. technology, finance, energy, etc.) and across the overall market, both in terms of daily frequence. We processed large datasets to create daily sentiment clusters, analyzed sector-specific sentiment trends, and prepared the data for potential time-series analysis to uncover relationships with market movements. This post details our methodology, challenges, and key findings, showcasing how we transformed raw sentiment data into structured, actionable insights.</p>
+<h3>Data Preprocessing</h3>
+<p>Our journey began with the raw sentiment data generated from the models (FinBERT, RoBERTa, DeBERTa), where the first two models has "positive score", "neutral score" and "negative score", but the last DeBERTa model only provides "positive" and "negative" scores. Our goal was to aggregate these sentiment scores into meaningful daily clusters, at 1. overall market level and 2. sector level, to enable further time-series analysis. We apply the data preprocessing below:</p>
+<ul>
+<li>Exchange: we select news with all tickers in the following US exchanges: ['NYSE', 'NASDAQ', 'CSE', 'AMEX'] to output US sentiments.</li>
+<li>Time horizon: we filter the data to be after 2017-08-17, because our cryptocurrency data only starts then (from Binance).</li>
+<li>Market value analysis: we filter those tickers with top 80% circulation market value (we want to pay more attention to news from big companies).</li>
+</ul>
+<h3>Sentiment Clustering Methodology</h3>
+<p>To aggregate sentiment scores, we developed a custom <code>sentiment_cluster</code> function that addressed two key challenges:</p>
+<ul>
+<li>
+<p><strong>Avoiding Double Counting:</strong> Some stocks had multiple news articles on the same day, which could skew sentiment scores. We averaged sentiment scores for each stock on a given day to mitigate this.</p>
+</li>
+<li>
+<p><strong>Handling Missing News:</strong> For stocks without news on a particular day, we assumed sentiment remained the same as the previous period, using forward-filling to propagate scores.</p>
+</li>
+</ul>
+<p>Here’s a simplified version of our clustering logic:</p>
+<div class="highlight"><pre><span></span><code><span class="k">def</span> <span class="nf">sentiment_cluster</span><span class="p">(</span><span class="n">df_</span><span class="p">,</span> <span class="n">stock_counts</span><span class="p">,</span> <span class="n">analysis_on</span><span class="o">=</span><span class="s1">&#39;finbert&#39;</span><span class="p">,</span> <span class="n">freq</span><span class="o">=</span><span class="s1">&#39;d&#39;</span><span class="p">,</span> <span class="n">impact</span><span class="o">=</span><span class="mi">3</span><span class="p">):</span>
+
+    <span class="c1"># process column names</span>
+    <span class="n">pos_col</span> <span class="o">=</span> <span class="n">analysis_on</span> <span class="o">+</span> <span class="s1">&#39;_pos&#39;</span>
+    <span class="n">neg_col</span> <span class="o">=</span> <span class="n">analysis_on</span> <span class="o">+</span> <span class="s1">&#39;_neg&#39;</span>
+    <span class="n">neu_col</span> <span class="o">=</span> <span class="n">analysis_on</span> <span class="o">+</span> <span class="s1">&#39;_neu&#39;</span>
+
+    <span class="c1"># 1. for the repeated news about the same stock at a certain period, we take the average.</span>
+    <span class="n">temp_senti_s</span> <span class="o">=</span> <span class="n">df_</span><span class="o">.</span><span class="n">groupby</span><span class="p">([</span><span class="s1">&#39;ticker&#39;</span><span class="p">,</span> <span class="n">freq_col</span><span class="p">])</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">[[</span><span class="n">pos_col</span><span class="p">,</span> <span class="n">neg_col</span><span class="p">,</span> <span class="n">neu_col</span><span class="p">]]</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
+
+    <span class="c1"># 2. stocks have no news remain the same sentiment score as last period.</span>
+    <span class="n">temp_senti_freq</span> <span class="o">=</span> <span class="n">temp_senti_s</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+    <span class="n">temp_count_freq</span> <span class="o">=</span> <span class="n">temp_senti_s</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">temp_count_freq</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="s1">&#39;inner_count&#39;</span>
+    <span class="n">temp_merge</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">stock_counts</span><span class="p">,</span> <span class="n">temp_count_freq</span><span class="p">,</span> <span class="n">temp_senti_freq</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">sort_index</span><span class="p">()</span><span class="o">.</span><span class="n">ffill</span><span class="p">()</span>
+    <span class="n">cluster_dict</span> <span class="o">=</span> <span class="p">{</span><span class="n">pos_col</span><span class="p">:</span> <span class="p">[],</span> <span class="n">neg_col</span><span class="p">:</span> <span class="p">[],</span> <span class="n">neu_col</span><span class="p">:</span> <span class="p">[]}</span>
+    <span class="n">last_senti</span> <span class="o">=</span> <span class="p">{</span><span class="n">pos_col</span><span class="p">:</span> <span class="n">temp_merge</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">1</span><span class="p">)[</span><span class="n">pos_col</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                  <span class="n">neg_col</span><span class="p">:</span> <span class="n">temp_merge</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">1</span><span class="p">)[</span><span class="n">neg_col</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                  <span class="n">neu_col</span><span class="p">:</span> <span class="n">temp_merge</span><span class="o">.</span><span class="n">head</span><span class="p">(</span><span class="mi">1</span><span class="p">)[</span><span class="n">neu_col</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">]}</span>
+
+    <span class="c1"># sentiment daily frequency clustering calculation</span>
+    <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="n">temp_merge</span><span class="o">.</span><span class="n">iterrows</span><span class="p">()):</span>
+        <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="p">[</span><span class="n">pos_col</span><span class="p">,</span> <span class="n">neg_col</span><span class="p">,</span> <span class="n">neu_col</span><span class="p">]:</span>
+            <span class="n">temp_put</span> <span class="o">=</span> <span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="n">s</span><span class="p">]</span> <span class="o">*</span> <span class="n">impact</span> <span class="o">*</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;inner_count&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">last_senti</span><span class="p">[</span><span class="n">s</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="s1">&#39;count&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;inner_count&#39;</span><span class="p">])</span>
+                           <span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">impact</span> <span class="o">*</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;inner_count&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;count&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="n">row</span><span class="p">[</span><span class="s1">&#39;inner_count&#39;</span><span class="p">])</span>
+
+            <span class="n">cluster_dict</span><span class="p">[</span><span class="n">s</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">temp_put</span><span class="p">)</span>
+            <span class="n">last_senti</span><span class="p">[</span><span class="n">s</span><span class="p">]</span> <span class="o">=</span> <span class="n">temp_put</span>
+    <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">cluster_dict</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">temp_merge</span><span class="o">.</span><span class="n">index</span><span class="p">)</span>
+</code></pre></div>
+
+<p>The impact parameter (set to 3) gave more weight to stocks with news coverage, ensuring that sentiment scores reflected actual news-driven sentiment more heavily than assumed carryover values.</p>
+<h3>Sector-Specific Clustering</h3>
+<p>We extended our clustering approach to analyze sentiment by sector using the GICS sector classifications (<code>gsector</code>) in our dataset. For example, "10" represents the "Energy" sector, "40" represents the "Finance" sector, etc. This allowed us to capture sector-specific trends, which are critical for understanding how broader market sentiment might differ across different industries. The <code>sector_cluster</code> function iterated over each sector, applying the same clustering logic:</p>
+<div class="highlight"><pre><span></span><code><span class="k">def</span> <span class="nf">sector_cluster</span><span class="p">(</span><span class="n">df_</span><span class="p">,</span> <span class="n">stock_counts_sector</span><span class="p">):</span>
+    <span class="n">sec_dict</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">sector</span><span class="p">,</span> <span class="n">group</span> <span class="ow">in</span> <span class="n">df_</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s1">&#39;gsector&#39;</span><span class="p">):</span>
+        <span class="n">cond</span> <span class="o">=</span> <span class="n">stock_counts_sector</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">get_level_values</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="o">==</span> <span class="n">sector</span>
+        <span class="n">tc</span> <span class="o">=</span> <span class="n">stock_counts_sector</span><span class="p">[</span><span class="n">cond</span><span class="p">]</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">temp_d</span> <span class="o">=</span> <span class="n">sentiment_cluster</span><span class="p">(</span><span class="n">group</span><span class="p">,</span> <span class="n">tc</span><span class="p">,</span> <span class="s1">&#39;d&#39;</span><span class="p">)</span>
+        <span class="n">sec_dict</span><span class="p">[</span><span class="n">sector</span><span class="p">]</span> <span class="o">=</span> <span class="n">temp_d</span>
+    <span class="k">return</span> <span class="n">sec_dict</span>
+</code></pre></div>
+
+<p>The output was a dictionary of DataFrames, each containing daily sentiment scores for a specific sector. We saved these results as pickled files for future analysis.</p>
+<h2>Why Sentiment Clustering and Market Proxies?</h2>
+<p>In our analysis, we aim to transform high-dimensional sentiment scores into a low-dimensional, single value for each day. This transformation is crucial for simplifying the data and making it more interpretable. To achieve this, we aggregate the sentiment scores from individual news articles into a composite score that represents the overall sentiment for each day. This process involves calculating weighted averages of the sentiment scores, taking into account the circulation market value of stocks. By doing so, we ensure that stocks with higher market value have a proportionally greater impact on the overall sentiment score.</p>
+<p>Furthermore, we are interested in determining whether our sentiment scores align with the overall market sentiment. To do this, we compare our aggregated sentiment scores with established market sentiment proxies. One such proxy is the "Fear and Greed Index" from CNN, which measures market sentiment based on various factors such as volatility, market momentum, and demand for safe-haven assets. By comparing our sentiment scores with the Fear and Greed Index, we can assess the accuracy and relevance of our sentiment analysis in reflecting broader market trends.</p>
+<h3>Example output of our clustered sentiment scores</h3>
+<p>Below is an example of the output of our clustered sentiment scores:</p>
+<table>
+<thead>
+<tr>
+<th>Index</th>
+<th>date</th>
+<th>cluster_neg</th>
+<th>cluster_pos</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>2017-08-17</td>
+<td>0.231701</td>
+<td>0.127091</td>
+</tr>
+<tr>
+<td>1</td>
+<td>2017-08-18</td>
+<td>0.199946</td>
+<td>0.157277</td>
+</tr>
+<tr>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+</tr>
+<tr>
+<td>1845</td>
+<td>2022-09-06</td>
+<td>0.274161</td>
+<td>0.186414</td>
+</tr>
+</tbody>
+</table>
+<p><br></p>
+<h3>Comparison between sentiment scores and market proxy</h3>
+<p>Below is the comparison between our sentiment scores and the market proxy (blue is our sentiment scores, red is the market proxy):</p>
+<p><img alt="Picture showing Comparison" src="/images/sent_compare.png"></p>
+<p>Analysis: The trend observed in our sentiment scores is similar to that of the market proxy. Notably, our sentiment scores tend to lead the market proxy, indicating that our sentiment analysis may provide early signals of market movements.</p>
+<h2>Developing Sentiment-Driven Trading Strategies</h2>
+<p>With our aggregated sentiment data in hand, we turned to developing trading strategies to test its predictive power on cryptocurrency markets. We implemented two strategies: <code>sentiment_strategy</code> and <code>moving_average_strategy</code>.</p>
+<h3><code>sentiment_strategy</code>: Threshold-Based Trading</h3>
+<p>The <code>sentiment_strategy</code> function uses sentiment scores as a signal to buy or sell cryptocurrencies. It takes a sentiment factor (e.g., rolling mean of <code>finbert_pos</code>), a cryptocurrency dataset (e.g., BTC, ETH, DOGE, SOL), and buy/sell thresholds (e.g., 0.75). The logic is as follows:</p>
+<ul>
+<li>If the sentiment score falls below a dynamic buy threshold (based on a rolling window), buy (signal=1).</li>
+<li>If the sentiment score exceeds a sell threshold, sell (signal=0).</li>
+<li>Forward-fill positions with a limit to avoid excessive holding periods (<code>limited_ffill</code>).</li>
+</ul>
+<p>We tested this strategy on BTC, DOGE, SOL, and ETH, calculating cumulative returns and visualizing results.</p>
+<p>The <code>sentiment_strategy</code> tests whether sentiment extremes (very positive or very negative) can predict short-term price movements in cryptocurrencies. Cryptocurrencies are highly sentiment-driven, making them an ideal testbed for our news-based sentiment signals. By setting dynamic thresholds, we aimed to adapt to changing market conditions and avoid overfitting to static rules.</p>
+<h3><code>moving_average_strategy</code>: Trend-Based Trading</h3>
+<p>The <code>moving_average_strategy</code> applies a classic moving average crossover approach to sentiment scores. It calculates short-term (e.g., 5-day) and long-term (e.g., 20-day) moving averages of the sentiment factor and generates signals:</p>
+<ul>
+<li>Buy (signal=1) when the short-term MA crosses below the long-term MA (indicating a potential reversal).</li>
+<li>Sell (signal=0) when the short-term MA crosses above the long-term MA.</li>
+<li>Compute cumulative returns and plot the results.</li>
+</ul>
+<p>We tested this on BTC data, using a factor derived from sector-specific sentiment.</p>
+<p>The moving average strategy leverages trends in sentiment rather than absolute levels, aiming to capture momentum shifts. This complements the <code>sentiment_strategy</code> by providing a different perspective on sentiment dynamics. We chose this approach because moving averages are widely used in technical analysis, and applying them to sentiment data allowed us to test whether sentiment trends behave similarly to price trends.</p>
+<p>Below are the results of the strategies of Threshold-Based Trading on BTC, ETH, and SOL:</p>
+<p><img alt="Picture1" src="/images/strategy_btc.jpg"></p>
+<p><img alt="Picture2" src="/images/strategy_eth.jpg"></p>
+<p><img alt="Picture3" src="/images/strategy_sln.jpg"></p>
+<h2>Conclusions</h2>
+<h3>Sentiment Clustering and Market Proxy Integration</h3>
+<ul>
+<li>The <code>finbert_cluster</code> dataset successfully aggregated sentiment scores, reducing noise and providing a stable time series for analysis.</li>
+<li>Granger causality tests indicated a statistically significant relationship between <code>finbert_pos</code> and the market proxy at certain lags, suggesting that news sentiment may have predictive power over market sentiment.</li>
+<li>Visualizations of <code>finbert_cluster</code> and <code>sentiment_proxy</code> (20-day rolling means) revealed periods of alignment and divergence, providing qualitative insights into sentiment dynamics.</li>
+</ul>
+<h3>Trading Strategies</h3>
+<ul>
+<li>The <code>sentiment_strategy</code> produced varied results across cryptocurrencies. For BTC, cumulative returns showed periods of outperformance, but volatility remained high. Similar patterns emerged for DOGE, SOL, and ETH.</li>
+<li>The <code>moving_average_strategy</code> captured some sentiment trends but underperformed in highly volatile periods, suggesting that sentiment trends may lag price movements in fast-moving markets like crypto.</li>
+</ul>
+<h3>Challenges</h3>
+<ul>
+<li>
+<p><strong>Data Volume and Memory Management</strong>: Processing millions of news records (e.g., 13.7 million rows in the FinBERT dataset) required careful memory management. We used <code>gc.collect()</code> frequently and processed data in chunks where possible.</p>
+</li>
+<li>
+<p><strong>Temporal Gaps</strong>: Some days had sparse news coverage for certain stocks or sectors, necessitating assumptions about sentiment persistence. While forward-filling helped, it may introduce bias, which we plan to address in future iterations.</p>
+</li>
+<li>
+<p><strong>Model Differences</strong>: FinBERT and RoBERTa produced slightly different sentiment distributions, likely due to their training data and tokenization approaches. Reconciling these differences for a unified analysis remains a work in progress.</p>
+</li>
+</ul>
+<!--
+## How to Include a Link and Python
+
+We chose [Investing.com](http://www.investing.com) to get the whole
+year data of XRP and recalculated the return and 30 days volatility.
+
+The code we use is as follows:
+
+<div class="highlight"><pre><span></span><code><span class="kn">import</span> <span class="nn">nltk</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="n">myvar</span> <span class="o">=</span> <span class="mi">8</span>
+<span class="n">DF</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="s1">&#39;XRP-data.csv&#39;</span><span class="p">)</span>
+</code></pre></div>
+
+
+
+
+## How to Include a Quote
+
+As a famous hedge fund manager once said:
+>Fed watching is a great tool to make money. I have been making all my
+>gazillions using this technique.
+
+
+
+## How to Include an Image
+
+Fed Chair Powell is working hard:
+
+![Picture showing Powell]({static}/images/group-Fintech-Disruption_Powell.jpeg)
+-->
+
+
+             
+ 
+            
+            
+            
+
+
+
+
+
+
+
+            <hr/>
+        </div>
+        <section id="article-sidebar" class="span2">
+            <h4>Published</h4>
+            <time itemprop="dateCreated" datetime="2025-03-09T23:59:00+08:00">Sun 09 March 2025</time>
+            <h4>Category</h4>
+            <a class="category-link" href="/categories.html#reflective-report-ref">Reflective Report</a>
+            <h4>Tags</h4>
+            <ul class="list-of-tags tags-in-article">
+                <li><a href="/tags.html#group-non-jane-street-ref">Group Non Jane Street
+                    <span class="superscript">2</span>
+</a></li>
+            </ul>
+<h4>Contact</h4>
+<div id="sidebar-social-link">
+</div>
+            
+
+
+
+
+
+            
+
+
+
+
+
+        </section>
+</div>
+</article>
+<!-- Root element of PhotoSwipe. Must have class pswp. -->
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    <!-- Background of PhotoSwipe.
+         It's a separate element as animating opacity is faster than rgba(). -->
+    <div class="pswp__bg"></div>
+
+    <!-- Slides wrapper with overflow:hidden. -->
+    <div class="pswp__scroll-wrap">
+
+        <!-- Container that holds slides.
+            PhotoSwipe keeps only 3 of them in the DOM to save memory.
+            Don't modify these 3 pswp__item elements, data is added later on. -->
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        <!-- Default (PhotoSwipeUI_Default) interface on top of sliding area. Can be changed. -->
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                <!--  Controls are self-explanatory. Order can be changed. -->
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                <!-- Preloader demo https://codepen.io/dimsemenov/pen/yyBWoR -->
+                <!-- element will get class pswp__preloader--active when preloader is running -->
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                      <div class="pswp__preloader__cut">
+                        <div class="pswp__preloader__donut"></div>
+                      </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>                    </div>
+                    <div class="span1"></div>
+                </div>
+            </div>
+        </div>
+<footer>
+
+
+
+
+    <div id="fpowered">
+        Powered by: <a href="http://getpelican.com/" title="Pelican Home Page" target="_blank" rel="nofollow noopener noreferrer">Pelican</a>
+        Theme: <a href="https://elegant.oncrashreboot.com/" title="Theme Elegant Home Page" target="_blank" rel="nofollow noopener noreferrer">Elegant</a>
+    </div>
+</footer>            <script src="//code.jquery.com/jquery.min.js"></script>
+        <script src="//netdna.bootstrapcdn.com/twitter-bootstrap/2.3.2/js/bootstrap.min.js"></script>
+        <script src="/theme/js/elegant.prod.9e9d5ce754.js"></script>
+        <script>
+            function validateForm(query)
+            {
+                return (query.length > 0);
+            }
+        </script>
+
+    <script>
+    (function () {
+        if (window.location.hash.match(/^#comment-\d+$/)) {
+            $('#comment_thread').collapse('show');
+        }
+    })();
+    window.onhashchange=function(){
+        if (window.location.hash.match(/^#comment-\d+$/))
+            window.location.reload(true);
+    }
+    $('#comment_thread').on('shown', function () {
+        var link = document.getElementById('comment-accordion-toggle');
+        var old_innerHTML = link.innerHTML;
+        $(link).fadeOut(200, function() {
+            $(this).text('Click here to hide comments').fadeIn(200);
+        });
+        $('#comment_thread').on('hidden', function () {
+            $(link).fadeOut(200, function() {
+                $(this).text(old_innerHTML).fadeIn(200);
+            });
+        })
+    })
+</script>
+
+    </body>
+    <!-- Theme: Elegant built for Pelican
+        License : MIT -->
+</html>

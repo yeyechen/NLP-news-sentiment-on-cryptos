@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" type="text/css" href="/theme/css/elegant.prod.9e9d5ce754.css" media="screen">
+        <link rel="stylesheet" type="text/css" href="/theme/css/custom.css" media="screen">
+
+        <link rel="dns-prefetch" href="//fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin>
+
+        <meta name="author" content="Non-JaneStreet" />
+
+        <meta property="og:type" content="article" />
+        <meta name="twitter:card" content="summary">
+
+<meta name="keywords" content="Group Non Jane Street, Reflective Report, " />
+
+<meta property="og:title" content="First Blog Post (by Group &#34;Non JaneStreet&#34;) "/>
+<meta property="og:url" content="/first-blog-post-by-group-non-janestreet.html" />
+<meta property="og:description" content="Introduction In this blog post, we explore the use of FinBERT, a transformer model for financial sentiment analysis, to analyze news data. We will walk through how to connect to a ClickHouse database to retrieve financial news, use FinBERT to analyze sentiment, and explain how we process the results for …" />
+<meta property="og:site_name" content="Non-JaneStreet NLP Project" />
+<meta property="og:article:author" content="Non-JaneStreet" />
+<meta property="og:article:published_time" content="2025-02-23T23:59:00+08:00" />
+<meta name="twitter:title" content="First Blog Post (by Group &#34;Non JaneStreet&#34;) ">
+<meta name="twitter:description" content="Introduction In this blog post, we explore the use of FinBERT, a transformer model for financial sentiment analysis, to analyze news data. We will walk through how to connect to a ClickHouse database to retrieve financial news, use FinBERT to analyze sentiment, and explain how we process the results for …">
+
+        <title>First Blog Post (by Group &#34;Non JaneStreet&#34;)  · Non-JaneStreet NLP Project
+</title>
+
+
+
+    </head>
+    <body>
+        <div id="content">
+            <div class="navbar navbar-static-top">
+                <div class="navbar-inner">
+                    <div class="container-fluid">
+                        <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+                            <span class="icon-bar"></span>
+                            <span class="icon-bar"></span>
+                            <span class="icon-bar"></span>
+                        </a>
+                        <a class="brand" href="/"><span class=site-name>Non-JaneStreet NLP Project</span></a>
+                        <div class="nav-collapse collapse">
+                            <ul class="nav pull-right top-menu">
+                                <li >
+                                    <a href=
+                                       "/"
+                                    >Home</a>
+                                </li>
+                                <li ><a href="/categories.html">Categories</a></li>
+                                <li ><a href="/tags.html">Tags</a></li>
+                                <li ><a href="/archives.html">Archives</a></li>
+                                <li><form class="navbar-search" action="/search.html" onsubmit="return validateForm(this.elements['q'].value);"> <input type="text" class="search-query" placeholder="Search" name="q" id="tipue_search_input"></form></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="container-fluid">
+                <div class="row-fluid">
+                    <div class="span1"></div>
+                    <div class="span10">
+<article itemscope>
+<div class="row-fluid">
+    <header class="page-header span10 offset2">
+        <h1>
+            <a href="/first-blog-post-by-group-non-janestreet.html">
+                First Blog Post (by Group "Non JaneStreet")
+            </a>
+        </h1>
+    </header>
+</div>
+
+<div class="row-fluid">
+        <div class="span8 offset2 article-content">
+            
+            <h2>Introduction</h2>
+<p>In this blog post, we explore the use of FinBERT, a transformer model for financial sentiment analysis, to analyze news data. We will walk through how to connect to a ClickHouse database to retrieve financial news, use FinBERT to analyze sentiment, and explain how we process the results for further analysis. By the end, you'll understand how FinBERT can help derive insights from news articles and potentially assist in financial decision-making processes.</p>
+<h2>Setting Up the ClickHouse Connection</h2>
+<p>To begin our analysis, we first need to connect to a ClickHouse database, which contains the financial news articles. ClickHouse is a columnar database designed for high-performance analytics, making it suitable for our large-scale data processing needs.</p>
+<h3>Key Difference Between ClickHouse and MySQL</h3>
+<ul>
+<li><strong>ClickHouse</strong> is optimized for fast, real-time data processing and analytics. It stores data in columns rather than rows, allowing for quick aggregation and retrieval of large datasets.</li>
+<li><strong>MySQL</strong>, on the other hand, is a traditional row-based relational database primarily used for transactional systems and smaller datasets.</li>
+</ul>
+<p>For our project, we use the <code>clickhouse_driver</code> to connect to the ClickHouse server and retrieve news data.</p>
+<h3>Installing Required Packages</h3>
+<p>To get started, install the necessary libraries:</p>
+<div class="highlight"><pre><span></span><code><span class="n">pip</span> <span class="n">install</span> <span class="n">clickhouse</span><span class="o">-</span><span class="n">driver</span>    <span class="c1"># Native protocol (recommended for performance)</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">clickhouse</span><span class="o">-</span><span class="n">connect</span>   <span class="c1"># HTTP/HTTPS protocol</span>
+</code></pre></div>
+
+<h3>Code to Connect to ClickHouse</h3>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span> <span class="nn">clickhouse_driver</span> <span class="kn">import</span> <span class="n">Client</span>
+
+<span class="n">client</span> <span class="o">=</span> <span class="n">Client</span><span class="p">(</span>
+    <span class="n">host</span><span class="o">=</span><span class="n">host_name</span><span class="p">,</span>
+    <span class="n">user</span><span class="o">=</span><span class="n">user_name</span><span class="p">,</span>
+    <span class="n">password</span><span class="o">=</span><span class="n">pswd</span><span class="p">,</span>
+    <span class="n">database</span><span class="o">=</span><span class="n">db_name</span><span class="p">,</span>
+    <span class="n">port</span><span class="o">=</span><span class="n">port</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+
+<p>Once connected, we can query the server for our news data. Here's a snapshot of one of the news records we retrieved:</p>
+<div class="highlight"><pre><span></span><code><span class="p">[(</span><span class="s1">&#39;2018-05-02T12:14:50.841934+00:00&#39;</span><span class="p">,</span>
+  <span class="s1">&#39;Yamana Gold Inc. (NYSE:AUY) shares are down more than -8.65% this year and recently decreased -0.70</span><span class="si">% o</span><span class="s1">r -$0.02 to settle at $2.85. SM Energy Company (NYSE:SM), on the other hand, is up 6.61% year to date as of 05/01/2018. It currently trades at $23.54 and has returned 3.11</span><span class="si">% d</span><span class="s1">uring the past week. Yamana Gold Inc.…&#39;</span><span class="p">,</span>
+  <span class="mf">10471811.0</span><span class="p">,</span>
+  <span class="s1">&#39;2018-05-02T11:06:33+00:00&#39;</span><span class="p">,</span>
+  <span class="s1">&#39;stocknewsgazette.com&#39;</span><span class="p">,</span>
+  <span class="s1">&#39;Energy/Materials/Stock&#39;</span><span class="p">,</span>
+  <span class="s1">&#39;sm&#39;</span><span class="p">,</span>
+  <span class="s1">&#39;auy/sm&#39;</span><span class="p">,</span>
+  <span class="s1">&#39;Yamana Gold Inc. (AUY) vs. SM Energy Company (SM): Which is the Better Investment?&#39;</span><span class="p">,</span>
+  <span class="s1">&#39;stocknewsgazette.com&#39;</span><span class="p">,</span>
+  <span class="s1">&#39;https://stocknewsgazette.com/2018/05/02/yamana-gold-inc-auy-vs-sm-energy-company-sm-which-is-the-better-investment/&#39;</span><span class="p">)]</span>
+</code></pre></div>
+
+<h2>Testing for FinBERT</h2>
+<p>Now that we have the data, we turn our attention to sentiment analysis using <strong>FinBERT</strong>, a BERT-based model fine-tuned for financial data. FinBERT is ideal for extracting sentiment from news articles, which can be positive, negative, or neutral.</p>
+<h3>Setting Up the Environment</h3>
+<p>To run FinBERT, ensure you have the following libraries installed:</p>
+<div class="highlight"><pre><span></span><code><span class="n">pip</span> <span class="n">install</span> <span class="n">torch</span><span class="o">==</span><span class="mf">2.2.2</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">pandas</span><span class="o">==</span><span class="mf">2.2.1</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">numpy</span><span class="o">==</span><span class="mf">1.26.4</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">scipy</span><span class="o">==</span><span class="mf">1.13.0</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">huggingface</span><span class="o">-</span><span class="n">hub</span><span class="o">==</span><span class="mf">0.29.1</span>
+</code></pre></div>
+
+<h3>Importing Libraries and Checking PyTorch Version</h3>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span> <span class="nn">transformers</span> <span class="kn">import</span> <span class="n">AutoTokenizer</span><span class="p">,</span> <span class="n">AutoModelForSequenceClassification</span>
+<span class="kn">import</span> <span class="nn">scipy</span>
+<span class="kn">import</span> <span class="nn">torch</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;PyTorch version: </span><span class="si">{</span><span class="n">torch</span><span class="o">.</span><span class="n">__version__</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;CUDA available: </span><span class="si">{</span><span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">()</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>  <span class="c1"># Should be True on servers</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;CUDA version: </span><span class="si">{</span><span class="n">torch</span><span class="o">.</span><span class="n">version</span><span class="o">.</span><span class="n">cuda</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>  <span class="c1"># Should show 12.1 on servers</span>
+</code></pre></div>
+
+<p>Make sure that your server supports CUDA, as this will speed up the model inference process.</p>
+<h3>Design Choice</h3>
+<p>We now have two choices when it comes to using Hugging face open-source models:</p>
+<ul>
+<li><strong>Option 1</strong>: use <code>pipeline()</code></li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="n">classifier</span> <span class="o">=</span> <span class="n">pipeline</span><span class="p">(</span><span class="s2">&quot;text-classification&quot;</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="s2">&quot;ProsusAI/finbert&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Using <code>pipeline()</code> is more convenient and easier to use, it is generally for quick prototyping and simple tasks.</p>
+<ul>
+<li><strong>Option 2</strong>: use direct model approach
+We need to create a tokenizer and a model like this</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s1">&#39;ProsusAI/finbert&#39;</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForSequenceClassification</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s1">&#39;ProsusAI/finbert&#39;</span><span class="p">)</span>
+</code></pre></div>
+
+<p>We choose this approach because we want to have more control over the model, for performance optimisation and deployment. </p>
+<h3>Deploying the FinBERT Model</h3>
+<p>We create a upstream function to calculate sentiment scores for a specific column (text column) in a given DataFrame. It returns the sentiment scores for positive, negative, and neutral, along with the predominant sentiment (positive, negative, or neutral). This function will be like the following:</p>
+<div class="highlight"><pre><span></span><code><span class="k">def</span> <span class="nf">finbert_sentiment_fill_df</span><span class="p">(</span><span class="n">df</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">text_col</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+    <span class="n">tokenizer_finbert</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s1">&#39;ProsusAI/finbert&#39;</span><span class="p">)</span>
+    <span class="n">model_finbert</span> <span class="o">=</span> <span class="n">AutoModelForSequenceClassification</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s1">&#39;ProsusAI/finbert&#39;</span><span class="p">)</span>
+
+    <span class="n">copy_df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">copy_df</span><span class="p">[[</span><span class="s1">&#39;finbert_pos&#39;</span><span class="p">,</span> <span class="s1">&#39;finbert_neg&#39;</span><span class="p">,</span> <span class="s1">&#39;finbert_neu&#39;</span><span class="p">,</span>
+             <span class="s1">&#39;finbert_stmt_score&#39;</span><span class="p">,</span> <span class="s1">&#39;finbert_stmt_label&#39;</span><span class="p">]]</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">copy_df</span><span class="p">[</span><span class="n">text_col</span><span class="p">]</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">calc_sentiment</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> 
+        <span class="n">tokenizer_finbert</span><span class="p">,</span><span class="n">model_finbert</span><span class="p">,</span> <span class="n">model_name</span><span class="o">=</span><span class="s1">&#39;finbert&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">)</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">copy_df</span>
+</code></pre></div>
+
+<p>where the downstream function will look like this:</p>
+<div class="highlight"><pre><span></span><code><span class="k">def</span> <span class="nf">calc_sentiment</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> 
+                  <span class="n">tokenizer</span><span class="p">:</span> <span class="n">AutoTokenizer</span><span class="p">,</span> 
+                  <span class="n">model</span><span class="p">:</span> <span class="n">AutoModelForSequenceClassification</span><span class="p">,</span> 
+                  <span class="n">model_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">:</span>
+    <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+        <span class="n">inputs</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span>
+            <span class="n">text</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s1">&#39;pt&#39;</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">truncation</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">max_length</span><span class="o">=</span><span class="mi">1024</span>
+        <span class="p">)</span>
+        <span class="n">outputs</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="o">**</span><span class="n">inputs</span><span class="p">)</span>
+
+        <span class="c1"># convert logits to probabilities</span>
+        <span class="n">values</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">special</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">outputs</span><span class="o">.</span><span class="n">logits</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span><span class="o">.</span><span class="n">squeeze</span><span class="p">())</span>
+        <span class="n">labels</span> <span class="o">=</span> <span class="p">[</span><span class="o">*</span><span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">id2label</span><span class="o">.</span><span class="n">values</span><span class="p">()]</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="c1"># positive</span>
+            <span class="n">values</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="c1"># negative</span>
+            <span class="n">values</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="c1"># neutral</span>
+            <span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">values</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="c1"># sentiment score</span>
+            <span class="n">labels</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">values</span><span class="p">)],</span> <span class="c1"># sentiment label (max probability label)</span>
+        <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">result</span>
+</code></pre></div>
+
+<p>The above funtion is specifically for FinBERT, different pre-trained classification models will have different labels, for example, the <strong>DeBERTa-v3</strong> model will only have positive and negative labels. We need to potentially modify the downstream <code>calc_sentiment()</code> to further incoperate different models. We will have <code>deberta_sentiment_fill_df()</code> and <code>deepseek_sentiment_fill_df()</code> in our further development.</p>
+<p>We define a function to run the sentiment analysis on each news article:</p>
+<div class="highlight"><pre><span></span><code><span class="k">def</span> <span class="nf">finbert_sentiment</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+    <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+        <span class="n">inputs</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="p">(</span>
+            <span class="n">text</span><span class="p">,</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s1">&#39;pt&#39;</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">truncation</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">max_length</span><span class="o">=</span><span class="mi">512</span>
+        <span class="p">)</span>
+        <span class="n">outputs</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="o">**</span><span class="n">inputs</span><span class="p">)</span>
+        <span class="n">logits</span> <span class="o">=</span> <span class="n">outputs</span><span class="o">.</span><span class="n">logits</span>
+        <span class="n">scores</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">k</span><span class="p">:</span> <span class="n">v</span>
+            <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span>
+                <span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">id2label</span><span class="o">.</span><span class="n">values</span><span class="p">(),</span>
+                <span class="n">scipy</span><span class="o">.</span><span class="n">special</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">logits</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span><span class="o">.</span><span class="n">squeeze</span><span class="p">()),</span>
+            <span class="p">)</span>
+        <span class="p">}</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">scores</span><span class="p">[</span><span class="s1">&#39;positive&#39;</span><span class="p">],</span>
+            <span class="n">scores</span><span class="p">[</span><span class="s1">&#39;negative&#39;</span><span class="p">],</span>
+            <span class="n">scores</span><span class="p">[</span><span class="s1">&#39;neutral&#39;</span><span class="p">],</span>
+            <span class="nb">max</span><span class="p">(</span><span class="n">scores</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="n">scores</span><span class="o">.</span><span class="n">get</span><span class="p">),</span>
+        <span class="p">)</span>
+</code></pre></div>
+
+<p>Here is our sample output of the three models:</p>
+<h2>Table 1: Sentiment Analysis Results</h2>
+<table>
+<thead>
+<tr>
+<th>crawlDate</th>
+<th>description</th>
+<th>sst2_label</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2022-09-08 03:59:27</td>
+<td>BALTIMORE (AP) — Alek Manoah retiró a 22 de su...</td>
+<td>negative</td>
+</tr>
+<tr>
+<td>2022-09-08 03:59:24</td>
+<td>CHICAGO (AP) — El dominicano Arístides Aquino ...</td>
+<td>positive</td>
+</tr>
+<tr>
+<td>2022-09-08 03:59:22</td>
+<td>Prime Video has released a statement.</td>
+<td>negative</td>
+</tr>
+<tr>
+<td>2022-09-08 03:59:21</td>
+<td>KANSAS CITY, Mo. (AP) — Salvador Perez’s sacri...</td>
+<td>positive</td>
+</tr>
+<tr>
+<td>2022-09-08 03:58:26</td>
+<td>North West Earnings Miss, Revenue Beats In Q2</td>
+<td>negative</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>Table 2: FinBERT Analysis</h2>
+<table>
+<thead>
+<tr>
+<th>crawlDate</th>
+<th>finbert_pos</th>
+<th>finbert_neg</th>
+<th>finbert_neu</th>
+<th>finbert_score</th>
+<th>finbert_label</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2022-09-08 03:59:27</td>
+<td>0.410662</td>
+<td>0.019876</td>
+<td>0.569462</td>
+<td>0.390786</td>
+<td>neutral</td>
+</tr>
+<tr>
+<td>2022-09-08 03:59:24</td>
+<td>0.130872</td>
+<td>0.018290</td>
+<td>0.850838</td>
+<td>0.112582</td>
+<td>neutral</td>
+</tr>
+<tr>
+<td>2022-09-08 03:59:22</td>
+<td>0.020164</td>
+<td>0.054695</td>
+<td>0.925141</td>
+<td>-0.034531</td>
+<td>neutral</td>
+</tr>
+<tr>
+<td>2022-09-08 03:59:21</td>
+<td>0.617857</td>
+<td>0.034792</td>
+<td>0.347351</td>
+<td>0.583064</td>
+<td>positive</td>
+</tr>
+<tr>
+<td>2022-09-08 03:58:26</td>
+<td>0.525914</td>
+<td>0.450251</td>
+<td>0.023835</td>
+<td>0.075663</td>
+<td>positive</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>Table 3: DeBERTa Analysis</h2>
+<table>
+<thead>
+<tr>
+<th>crawlDate</th>
+<th>deberta_pos</th>
+<th>deberta_neg</th>
+<th>deberta_score</th>
+<th>deberta_label</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2022-09-08 03:59:27</td>
+<td>0.517502</td>
+<td>0.482498</td>
+<td>0.035004</td>
+<td>positive</td>
+</tr>
+<tr>
+<td>2022-09-08 03:59:24</td>
+<td>0.515786</td>
+<td>0.484214</td>
+<td>0.031571</td>
+<td>positive</td>
+</tr>
+<tr>
+<td>2022-09-08 03:59:22</td>
+<td>0.520406</td>
+<td>0.479594</td>
+<td>0.040811</td>
+<td>positive</td>
+</tr>
+<tr>
+<td>2022-09-08 03:59:21</td>
+<td>0.518034</td>
+<td>0.481966</td>
+<td>0.036069</td>
+<td>positive</td>
+</tr>
+<tr>
+<td>2022-09-08 03:58:26</td>
+<td>0.515076</td>
+<td>0.484924</td>
+<td>0.030152</td>
+<td>positive</td>
+</tr>
+</tbody>
+</table>
+<p>This code will add the sentiment analysis results to the DataFrame, allowing us to assess the sentiment of each news article. The <code>finbert_score</code> column gives us a quick indication of the overall sentiment, with a positive score indicating a positive sentiment and a negative score indicating a negative sentiment.</p>
+<h2>Model Comparison</h2>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Pos/Neg/Neu</th>
+<th>Score Range</th>
+<th>Label Logic</th>
+<th>Example Performance (Row 4)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>FinBERT</strong></td>
+<td>✓✓✓</td>
+<td>-1 to +1</td>
+<td>Neutral if max(neu) &gt; pos+neg</td>
+<td>Correctly labels earnings news (positive)</td>
+</tr>
+<tr>
+<td><strong>SST-2</strong></td>
+<td>✓✓</td>
+<td>0-1</td>
+<td>Simple argmax(pos/neg)</td>
+<td>Mislabels earnings news (negative)</td>
+</tr>
+<tr>
+<td><strong>DeBERTa</strong></td>
+<td>✓✓</td>
+<td>-1 to +1</td>
+<td>Always positive label in your data</td>
+<td>Overly optimistic (labels all positive)</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h3>Key Observations</h3>
+<h4><strong>FinBERT (Recommended for Financial Texts)</strong></h4>
+<p><strong>Strengths:</strong></p>
+<ul>
+<li>
+<p><strong>Neutral class detection</strong>: 0.925 neutral probability in Row 2 (TV news)</p>
+</li>
+<li>
+<p><strong>Financial context awareness</strong>: Correct positive label for earnings news (Row 4)</p>
+</li>
+<li><strong>Conservative scoring</strong>: 0.583 score for clear positive case (Row 3)</li>
+</ul>
+<hr>
+<h4><strong>SST-2 (Not Recommended)</strong></h4>
+<p><strong>Issues:</strong></p>
+<ul>
+<li>
+<p><strong>Binary classification fails on financial nuance</strong></p>
+</li>
+<li>
+<p><strong>Contradicts others</strong>: Labels earnings beat (Row 4) as negative</p>
+</li>
+<li>
+<p><strong>No neutral class</strong>: Forces positive/negative even for factual reports</p>
+</li>
+</ul>
+<hr>
+<h4><strong>DeBERTa (Use with Caution)</strong></h4>
+<p><strong>Patterns:</strong></p>
+<ul>
+<li>
+<p><strong>Always positive labels in your sample</strong>: Positive in all 5 rows</p>
+</li>
+<li>
+<p><strong>Tight score range</strong>: All scores between 0.03-0.04 difference</p>
+</li>
+<li>
+<p><strong>Potential overconfidence</strong>: Labels TV controversy (Row 2) as positive</p>
+</li>
+</ul>
+<h2>Conclusion of Our First Blog</h2>
+<p>In our financial sentiment analysis project, we rigorously evaluated three specialized models: BERT Base SST-2, FinBERT, and DeBERTa. Based on benchmark results from AI4Finance's FinGPT repository, FinBERT demonstrated superior performance on the Financial Phrase Bank Dataset (FPB) with a score of 0.880 compared to models like GPT4(0.833) and BloombergGPT(0.511). This aligns with our requirement for precise detection of financial-specific semantics like "earnings surprise" and "regulatory overhang." While DeBERTa showed promise in general language contexts, FinBERT's domain-specific training in financial lexicon made it our benchmark choice.</p>
+<p>A key benefit of FinBERT is the structure of its three-class output. In contrast, binary classifiers like SST-2 (0.636 TFNS score) applied forced artificial positive/negative labels to factual statements like “The Fed left the rates at 5.25%.” FinBERT’s neutral classification, with a TFNS score of 0.538, lets us separate factual financial reporting from actionable market sentiment—a critical requirement for our stakeholders.</p>
+<h2>Further Work</h2>
+<p>To further enhance our sentiment analysis capabilities, we plan a three-phase evaluation of DeepSeek-v3 and Ollama 3.1 while maintaining our FinBERT production pipeline. We will run parallel inferences on a 1,000-article sample from our news dataset, comparing sentiment labels from each model against our FinBERT baseline and human-annotated ground truth. Models achieving at least 85% accuracy relative to human labels will be considered for integration into a hybrid fallback system, where low-confidence FinBERT predictions (scores between 0.3-0.7) trigger additional analysis from larger models.</p>
+<p>Furthermore, we will assign sentiment scores to news articles that reference specific stock tickers and merge these scores with our Bitcoin hourly dataset. By averaging sentiment scores within each hourly window, we can analyze potential correlations through regression modeling, providing deeper insights into sentiment-driven market movements.</p>
+<!--
+## How to Include a Link and Python
+
+We chose [Investing.com](http://www.investing.com) to get the whole
+year data of XRP and recalculated the return and 30 days volatility.
+
+The code we use is as follows:
+
+<div class="highlight"><pre><span></span><code><span class="kn">import</span> <span class="nn">nltk</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="n">myvar</span> <span class="o">=</span> <span class="mi">8</span>
+<span class="n">DF</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="s1">&#39;XRP-data.csv&#39;</span><span class="p">)</span>
+</code></pre></div>
+
+
+
+
+## How to Include a Quote
+
+As a famous hedge fund manager once said:
+>Fed watching is a great tool to make money. I have been making all my
+>gazillions using this technique.
+
+
+
+## How to Include an Image
+
+Fed Chair Powell is working hard:
+
+![Picture showing Powell]({static}/images/group-Fintech-Disruption_Powell.jpeg)
+-->
+
+
+             
+ 
+            
+            
+            
+
+
+
+
+
+
+
+            <hr/>
+        </div>
+        <section id="article-sidebar" class="span2">
+            <h4>Published</h4>
+            <time itemprop="dateCreated" datetime="2025-02-23T23:59:00+08:00">Sun 23 February 2025</time>
+            <h4>Category</h4>
+            <a class="category-link" href="/categories.html#reflective-report-ref">Reflective Report</a>
+            <h4>Tags</h4>
+            <ul class="list-of-tags tags-in-article">
+                <li><a href="/tags.html#group-non-jane-street-ref">Group Non Jane Street
+                    <span class="superscript">2</span>
+</a></li>
+            </ul>
+<h4>Contact</h4>
+<div id="sidebar-social-link">
+</div>
+            
+
+
+
+
+
+            
+
+
+
+
+
+        </section>
+</div>
+</article>
+<!-- Root element of PhotoSwipe. Must have class pswp. -->
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    <!-- Background of PhotoSwipe.
+         It's a separate element as animating opacity is faster than rgba(). -->
+    <div class="pswp__bg"></div>
+
+    <!-- Slides wrapper with overflow:hidden. -->
+    <div class="pswp__scroll-wrap">
+
+        <!-- Container that holds slides.
+            PhotoSwipe keeps only 3 of them in the DOM to save memory.
+            Don't modify these 3 pswp__item elements, data is added later on. -->
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        <!-- Default (PhotoSwipeUI_Default) interface on top of sliding area. Can be changed. -->
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                <!--  Controls are self-explanatory. Order can be changed. -->
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                <!-- Preloader demo https://codepen.io/dimsemenov/pen/yyBWoR -->
+                <!-- element will get class pswp__preloader--active when preloader is running -->
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                      <div class="pswp__preloader__cut">
+                        <div class="pswp__preloader__donut"></div>
+                      </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>                    </div>
+                    <div class="span1"></div>
+                </div>
+            </div>
+        </div>
+<footer>
+
+
+
+
+    <div id="fpowered">
+        Powered by: <a href="http://getpelican.com/" title="Pelican Home Page" target="_blank" rel="nofollow noopener noreferrer">Pelican</a>
+        Theme: <a href="https://elegant.oncrashreboot.com/" title="Theme Elegant Home Page" target="_blank" rel="nofollow noopener noreferrer">Elegant</a>
+    </div>
+</footer>            <script src="//code.jquery.com/jquery.min.js"></script>
+        <script src="//netdna.bootstrapcdn.com/twitter-bootstrap/2.3.2/js/bootstrap.min.js"></script>
+        <script src="/theme/js/elegant.prod.9e9d5ce754.js"></script>
+        <script>
+            function validateForm(query)
+            {
+                return (query.length > 0);
+            }
+        </script>
+
+    <script>
+    (function () {
+        if (window.location.hash.match(/^#comment-\d+$/)) {
+            $('#comment_thread').collapse('show');
+        }
+    })();
+    window.onhashchange=function(){
+        if (window.location.hash.match(/^#comment-\d+$/))
+            window.location.reload(true);
+    }
+    $('#comment_thread').on('shown', function () {
+        var link = document.getElementById('comment-accordion-toggle');
+        var old_innerHTML = link.innerHTML;
+        $(link).fadeOut(200, function() {
+            $(this).text('Click here to hide comments').fadeIn(200);
+        });
+        $('#comment_thread').on('hidden', function () {
+            $(link).fadeOut(200, function() {
+                $(this).text(old_innerHTML).fadeIn(200);
+            });
+        })
+    })
+</script>
+
+    </body>
+    <!-- Theme: Elegant built for Pelican
+        License : MIT -->
+</html>

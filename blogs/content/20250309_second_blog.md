@@ -1,5 +1,5 @@
 ---
-Title: Second Blog Post (by Group "Non JaneStreet")
+Title: Transforming Sentiment into Market Predictions
 Date: 2025-03-09 23:59
 Category: Reflective Report
 Tags: Group Non Jane Street
@@ -7,21 +7,14 @@ Tags: Group Non Jane Street
 
 ## Introduction
 
-In our second blog post, we dive deeper into our financial sentiment analysis project, building on the foundation laid in our first blog post. Over the past two weeks, our group has focused on aggregating and clustering sentiment scores derived from financial news articles using FinBERT and RoBERTa models. We processed large datasets to create daily sentiment clusters, analyzed sector-specific sentiment trends, and prepared the data for potential time-series analysis to uncover relationships with market movements. This post details our methodology, challenges, and key findings, showcasing how we transformed raw sentiment data into structured, actionable insights.
+In our second blog post, we dive deeper into our financial sentiment analysis project, building on the foundation laid in our first blog post. During the first part, we applied sentiment analysis to financial news (title) using Large Language Models such as FinBERT, RoBERTa and DeBERTa. After we got the sentiment scores, our group has focused on aggregating sentiment scores by clustering sectors (e.g. technology, finance, energy, etc.) and across the overall market, both in terms of daily frequence. We processed large datasets to create daily sentiment clusters, analyzed sector-specific sentiment trends, and prepared the data for potential time-series analysis to uncover relationships with market movements. This post details our methodology, challenges, and key findings, showcasing how we transformed raw sentiment data into structured, actionable insights.
 
-## Data Preparation and Sentiment Aggregation
+### Data Preprocessing
+Our journey began with the raw sentiment data generated from the models (FinBERT, RoBERTa, DeBERTa), where the first two models has "positive score", "neutral score" and "negative score", but the last DeBERTa model only provides "positive" and "negative" scores. Our goal was to aggregate these sentiment scores into meaningful daily clusters, at 1. overall market level and 2. sector level, to enable further time-series analysis. We apply the data preprocessing below:
 
-Our journey began with the raw sentiment data generated from FinBERT and RoBERTa models, which we had previously applied to financial news articles stored in a ClickHouse database (as discussed in our first blog). The datasets contained sentiment scores (positive, negative, neutral) for news articles linked to specific stock tickers, along with metadata like publication dates and sector classifications. Our goal was to aggregate these sentiment scores into meaningful daily clusters, both at a market-wide level and by sector, to enable further time-series analysis.
-
-### Loading and Filtering Data
-
-We started by loading the processed sentiment data into Pandas DataFrames. The first notebook focused on RoBERTa sentiment scores, while the second used FinBERT scores. Both datasets were filtered to include only records from August 17, 2017, to September 6, 2022, aligning with our target analysis period. Below is a snippet of the filtering process:
-
-```python
-df = df[df['date'] >= '2017-08-17']
-```
-
-Additionally, we used ticker count data (`sNv.pkl`) to understand the number of unique stocks mentioned per day and per sector, which helped us normalize sentiment scores later. This step ensured we accounted for varying news coverage across different stocks and sectors.
+- Exchange: we select news with all tickers in the following US exchanges: ['NYSE', 'NASDAQ', 'CSE', 'AMEX'] to output US sentiments.
+- Time horizon: we filter the data to be after 2017-08-17, because our cryptocurrency data only starts then (from Binance).
+- Market value analysis: we filter those tickers with top 80% circulation market value (we want to pay more attention to news from big companies).
 
 ### Sentiment Clustering Methodology
 
@@ -34,37 +27,29 @@ To aggregate sentiment scores, we developed a custom `sentiment_cluster` functio
 Here’s a simplified version of our clustering logic:
 
 ```python
-def sentiment_cluster(df_, stock_counts, fin_col, freq='d', impact=3):
-    """
-    params:
-       df_:
-       stock_counts:
-       fin_col:
-       freq:
-       impact:
-    """
-    """ps: 1. some stocks have many news during same period, we should avoid double counting."""
-    df_ = df_.copy()
-    if freq == 'h':
-        freq_col = 'publishedDate'
-        stock_counts.name = 'count'
-        df_ = pd.merge(df_, stock_counts, left_on='date', right_index=True, how='left')
-        stock_counts = df_[['count', freq_col]].drop_duplicates().set_index([freq_col])
-    else:
-        freq_col = 'date'
-    # for the repeated news about the same stock at a certain period, we take the average.
-    temp_senti_s = df_.groupby(['ticker', freq_col]).apply(lambda x: x[['finbert_pos', 'finbert_neg', 'finbert_neu']].mean(axis=0))
-    # suppose the stocks have no news remain the same sentiment score as last period.
+def sentiment_cluster(df_, stock_counts, analysis_on='finbert', freq='d', impact=3):
+    
+    # process column names
+    pos_col = analysis_on + '_pos'
+    neg_col = analysis_on + '_neg'
+    neu_col = analysis_on + '_neu'
+
+    # 1. for the repeated news about the same stock at a certain period, we take the average.
+    temp_senti_s = df_.groupby(['ticker', freq_col]).apply(lambda x: x[[pos_col, neg_col, neu_col]].mean(axis=0))
+
+    # 2. stocks have no news remain the same sentiment score as last period.
     temp_senti_freq = temp_senti_s.groupby(level=1).mean()
     temp_count_freq = temp_senti_s.groupby(level=1).apply(lambda x: x.shape[0])
     temp_count_freq.name = 'inner_count'
     temp_merge = pd.concat([stock_counts, temp_count_freq, temp_senti_freq], axis=1).sort_index().ffill()
-    cluster_dict = {'finbert_pos': [], 'finbert_neg': [], 'finbert_neu': []}
-    last_senti = {'finbert_pos': temp_merge.head(1)['finbert_pos'].values[0],
-                  'finbert_neg': temp_merge.head(1)['finbert_neg'].values[0],
-                  'finbert_neu': temp_merge.head(1)['finbert_neu'].values[0]}
-    for ind, row in temp_merge.iterrows():
-        for s in ['finbert_pos', 'finbert_neg', 'finbert_neu']:
+    cluster_dict = {pos_col: [], neg_col: [], neu_col: []}
+    last_senti = {pos_col: temp_merge.head(1)[pos_col].values[0],
+                  neg_col: temp_merge.head(1)[neg_col].values[0],
+                  neu_col: temp_merge.head(1)[neu_col].values[0]}
+
+    # sentiment daily frequency clustering calculation
+    for idx, row in tqdm(temp_merge.iterrows()):
+        for s in [pos_col, neg_col, neu_col]:
             temp_put = (row[s] * impact * row['inner_count'] + last_senti[s] * (row['count'] - row['inner_count'])
                            ) / (impact * row['inner_count'] + row['count'] - row['inner_count'])
             
@@ -76,57 +61,45 @@ The impact parameter (set to 3) gave more weight to stocks with news coverage, e
 
 ### Sector-Specific Clustering
 
-We extended our clustering approach to analyze sentiment by sector using the GICS sector classifications (`gsector`) in our dataset. This allowed us to capture sector-specific trends, which are critical for understanding how broader market sentiment might differ across industries like technology, finance, or energy. The `sector_cluster` function iterated over each sector, applying the same clustering logic:
+We extended our clustering approach to analyze sentiment by sector using the GICS sector classifications (`gsector`) in our dataset. For example, "10" represents the "Energy" sector, "40" represents the "Finance" sector, etc. This allowed us to capture sector-specific trends, which are critical for understanding how broader market sentiment might differ across different industries. The `sector_cluster` function iterated over each sector, applying the same clustering logic:
 
 ```python
 def sector_cluster(df_, stock_counts_sector):
     sec_dict = {}
     for sector, group in df_.groupby('gsector'):
-        tc = stock_counts_sector[stock_counts_sector.index.get_level_values(0) == sector].reset_index(level=0, drop=True)
+        cond = stock_counts_sector.index.get_level_values(0) == sector
+        tc = stock_counts_sector[cond].reset_index(level=0, drop=True)
         temp_d = sentiment_cluster(group, tc, 'd')
         sec_dict[sector] = temp_d
     return sec_dict
 ```
 
-The output was a dictionary of DataFrames, each containing daily sentiment scores for a specific sector. We saved these results as pickled files (`roberta_sector_sentiment.pkl` and `finbert_sentiment_by_sector_dict.pkl`) for future analysis.
+The output was a dictionary of DataFrames, each containing daily sentiment scores for a specific sector. We saved these results as pickled files for future analysis.
 
 ## Why Sentiment Clustering and Market Proxies?
 
-Raw sentiment scores for individual news articles are useful but noisy—stocks often have multiple news articles per day, and sentiment can vary widely within short periods. To address this, we developed `finbert_cluster` to aggregate sentiment scores at a daily level, capturing the overall market mood while accounting for the volume of news. Additionally, we used `sentiment_proxy`—a dataset reflecting market fear and greed indices—to contextualize our sentiment data against broader market sentiment trends. Our goal was to test whether aggregated sentiment signals could predict or correlate with market movements, particularly in the volatile cryptocurrency space.
+In our analysis, we aim to transform high-dimensional sentiment scores into a low-dimensional, single value for each day. This transformation is crucial for simplifying the data and making it more interpretable. To achieve this, we aggregate the sentiment scores from individual news articles into a composite score that represents the overall sentiment for each day. This process involves calculating weighted averages of the sentiment scores, taking into account the circulation market value of stocks. By doing so, we ensure that stocks with higher market value have a proportionally greater impact on the overall sentiment score.
 
-### Clustering Sentiment Scores with `finbert_cluster`
+Furthermore, we are interested in determining whether our sentiment scores align with the overall market sentiment. To do this, we compare our aggregated sentiment scores with established market sentiment proxies. One such proxy is the "Fear and Greed Index" from CNN, which measures market sentiment based on various factors such as volatility, market momentum, and demand for safe-haven assets. By comparing our sentiment scores with the Fear and Greed Index, we can assess the accuracy and relevance of our sentiment analysis in reflecting broader market trends.
 
-We started by loading our pre-processed FinBERT sentiment data (`final_m.pkl`), which contains sentiment scores (`finbert_pos`, `finbert_neg`, `finbert_neu`, and a composite `finbert` score) for news articles from 2017-08-17 onward . To make this data actionable, we implemented a custom function `sentiment_cluster` to aggregate sentiment scores by ticker and date. The function:
+### Example output of our clustered sentiment scores
+Below is an example of the output of our clustered sentiment scores:
 
-- Groups news by ticker and date (or hour, depending on the frequency parameter).
-- Computes weighted averages of sentiment scores, factoring in the number of news articles per period.
-- Handles missing data by propagating the last known sentiment, ensuring continuity in the time series.
+| Index |   date     | cluster_neg   | cluster_pos |
+|-------|------------|---------------|-------------|
+|  0    | 2017-08-17 |   0.231701    | 0.127091    |
+|  1    | 2017-08-18 |   0.199946    | 0.157277    |
+| ...   | ...        |   ...         | ...         |
+| 1845  | 2022-09-06 |   0.274161    | 0.186414    |
 
-The resulting `finbert_cluster` dataset provides daily aggregated sentiment scores, as shown below:
+<br>
 
-| Index | finbert_pos | finbert_neg | finbert_neu | dt         | close_value |
-|-------|-------------|-------------|-------------|------------|-------------|
-| 1667  | 0.231701    | 0.127091    | 0.641208    | 2017-08-17 | ...         |
-| 1668  | 0.199946    | 0.157277    | 0.642777    | 2017-08-17 | ...         |
-| ...   | ...         | ...         | ...         | ...        | ...         |
-| 3115  | 0.274161    | 0.186414    | 0.539425    | 2022-09-06 | ...         |
+### Comparison between sentiment scores and market proxy
+Below is the comparison between our sentiment scores and the market proxy (blue is our sentiment scores, red is the market proxy):
 
+![Picture showing Comparison]({static}/images/sent_compare.png)
 
-Aggregating sentiment scores into `finbert_cluster` allowed us to smooth out the noise inherent in individual news articles and focus on broader trends. By weighting the sentiment scores by the number of articles (`inner_count`), we ensured that high-volume news days had a proportional impact on the overall sentiment signal. This step was crucial for downstream analysis, as it provided a stable time series we could merge with market data and use for causality testing and strategy development.
-
-### Integrating with `sentiment_proxy` for Market Context
-
-To contextualize our sentiment data, we integrated `finbert_cluster` with a market sentiment proxy (`sentiment_proxy`), which we sourced from a fear and greed index dataset (`alexey-formalmethods_fear_gr`). This dataset provides a daily measure of market sentiment, often used to gauge investor fear or greed. We merged `finbert_cluster` with `sentiment_proxy` on the date index, creating a unified dataset that combines news sentiment with market sentiment:
-
-| Index | finbert_pos | finbert_neg | finbert_neu | dt         | close_value |
-|-------|-------------|-------------|-------------|------------|-------------|
-| 1667  | 0.231701    | 0.127091    | 0.641208    | 2017-08-17 | ...         |
-| ...   | ...         | ...         | ...         | ...        | ...         |
-
-We then performed Granger causality tests to explore whether our aggregated sentiment scores (`finbert_pos`) could predict movements in the market proxy. The results showed significant causality at certain lags (e.g., p=0.0023 at lag 2), suggesting a potential predictive relationship.
-
-
-Merging `finbert_cluster` with `sentiment_proxy` allowed us to test whether news-derived sentiment aligns with or predicts broader market sentiment. The fear and greed index captures investor psychology, which often drives market movements. By combining it with our FinBERT-derived sentiment, we aimed to uncover whether news sentiment could serve as an early indicator of market shifts—a critical insight for trading strategies.
+Analysis: The trend observed in our sentiment scores is similar to that of the market proxy. Notably, our sentiment scores tend to lead the market proxy, indicating that our sentiment analysis may provide early signals of market movements.
 
 ## Developing Sentiment-Driven Trading Strategies
 
@@ -142,8 +115,6 @@ The `sentiment_strategy` function uses sentiment scores as a signal to buy or se
 
 We tested this strategy on BTC, DOGE, SOL, and ETH, calculating cumulative returns and visualizing results.
 
-放图片
-
 The `sentiment_strategy` tests whether sentiment extremes (very positive or very negative) can predict short-term price movements in cryptocurrencies. Cryptocurrencies are highly sentiment-driven, making them an ideal testbed for our news-based sentiment signals. By setting dynamic thresholds, we aimed to adapt to changing market conditions and avoid overfitting to static rules.
 
 ### `moving_average_strategy`: Trend-Based Trading
@@ -158,7 +129,15 @@ We tested this on BTC data, using a factor derived from sector-specific sentimen
 
 The moving average strategy leverages trends in sentiment rather than absolute levels, aiming to capture momentum shifts. This complements the `sentiment_strategy` by providing a different perspective on sentiment dynamics. We chose this approach because moving averages are widely used in technical analysis, and applying them to sentiment data allowed us to test whether sentiment trends behave similarly to price trends.
 
-## Results and Observations
+Below are the results of the strategies of Threshold-Based Trading on BTC, ETH, and SOL:
+
+![Picture1]({static}/images/strategy_btc.jpg)
+
+![Picture2]({static}/images/strategy_eth.jpg)
+
+![Picture3]({static}/images/strategy_sln.jpg)
+
+## Conclusions
 
 ### Sentiment Clustering and Market Proxy Integration
 
@@ -171,21 +150,13 @@ The moving average strategy leverages trends in sentiment rather than absolute l
 - The `sentiment_strategy` produced varied results across cryptocurrencies. For BTC, cumulative returns showed periods of outperformance, but volatility remained high. Similar patterns emerged for DOGE, SOL, and ETH.
 - The `moving_average_strategy` captured some sentiment trends but underperformed in highly volatile periods, suggesting that sentiment trends may lag price movements in fast-moving markets like crypto.
 
-
-
-## Challenges
+### Challenges
 
 - **Data Volume and Memory Management**: Processing millions of news records (e.g., 13.7 million rows in the FinBERT dataset) required careful memory management. We used `gc.collect()` frequently and processed data in chunks where possible.
 
 - **Temporal Gaps**: Some days had sparse news coverage for certain stocks or sectors, necessitating assumptions about sentiment persistence. While forward-filling helped, it may introduce bias, which we plan to address in future iterations.
 
 - **Model Differences**: FinBERT and RoBERTa produced slightly different sentiment distributions, likely due to their training data and tokenization approaches. Reconciling these differences for a unified analysis remains a work in progress.
-
-
-
-
-
-
 
 
 <!--
