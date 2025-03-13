@@ -10,7 +10,6 @@ from datetime import datetime
 from clickhouse_driver import Client
 import torch.nn.functional as F
 
-
 from config import DATA_PATH, CLICKHOUSE_HOST
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
@@ -22,9 +21,78 @@ print(f'PyTorch version: {torch.__version__}')
 print(f'CUDA available: {torch.cuda.is_available()}')  # Should be True on servers
 print(f'CUDA version: {torch.version.cuda}')  # Should show 12.3 on servers
 
-#========
-# FinBERT
-#========
+
+"""
+Functions to process the news data, from the tiingo database.
+"""
+def process_news_data(data: pd.DataFrame, ticker_list: List[str]) -> pd.DataFrame:
+    # Precompute the set for fast membership testing
+    ticker_set = set(ticker_list)
+    
+    # Filter out rows where any key column is empty using vectorized string operations
+    mask = (
+        (data['tickers_all'].astype(str).str.strip() != '' )&
+        (data['description'].astype(str).str.strip() != '') &
+        (data['title'].astype(str).str.strip() != '')
+    )
+    data = data[mask].copy()
+    
+    # Convert tickers_all to uppercase and split on '/'
+    data['tickers_all'] = data['tickers_all'].str.upper().str.split('/')
+    
+    # Cache the subset check result for repeated ticker lists
+    cache = {}
+    def is_valid_tickers(tickers):
+        key = tuple(tickers)  # Use tuple as a hashable cache key
+        if key not in cache:
+            cache[key] = set(tickers).issubset(ticker_set)
+        return cache[key]
+    
+    # Apply the cached subset check. List comprehensions are often faster than apply.
+    valid_mask = [is_valid_tickers(tickers) for tickers in data['tickers_all']]
+    data = data[valid_mask]
+    
+    return data
+
+def get_news_data(user_name:str, pwd:str, 
+                  start_date: datetime, end_date: datetime):
+    client = Client(
+        CLICKHOUSE_HOST,
+        user=user_name,
+        password=pwd,
+        database='tiingo'
+    )
+
+    start_date = start_date.strftime('%Y-%m-%d')
+    end_date = end_date.strftime('%Y-%m-%d')
+
+    sql = f"""
+    select distinct(id), description, tickers_all, title, parseDateTimeBestEffort(publishedDate) AS date 
+    from news
+    where date >= '{start_date}'
+    and date < '{end_date}'
+    """
+
+    res = fetch_database(client, sql)
+    news_data = pd.DataFrame(res, columns=['id', 'description', 'tickers_all', 'title', 'date'])
+    return news_data
+
+def run_model(data, model, device):
+    if model == 'finbert':
+        results = finbert_sentiment_fill_df(data, text_col='title', device=device)
+        results = results[['id', 'finbert_pos', 'finbert_neg', 'finbert_neu', 'finbert_stmt_score', 'finbert_stmt_label']]
+        return results
+    elif model == 'roberta':
+        results =  roberta_sentiment_fill_df(data, text_col='title', device=device)
+        results = results[['id', 'roberta_pos', 'roberta_neg', 'roberta_neu', 'roberta_stmt_score', 'roberta_stmt_label']]
+        return results
+    
+    else:
+        return None
+
+"""
+Higher level functions that are used to calculate sentiment scores.
+"""
 
 def fetch_database(client, sql):
     res = client.execute(sql)
@@ -97,6 +165,18 @@ def calc_sentiment(text: str,
 
         return result
 
+"""
+Lower level functions to get sentiment scores using different models, including:
+- FinBERT
+- DeBERTa
+- RoBERTa
+
+Notice different "AutoModelForSequenceClassification" have different outputs, DeBERTa does not have a neutral class.
+"""
+
+#========
+# FinBERT
+#========
 
 def finbert_sentiment_fill_df(df: pd.DataFrame, text_col: str, device:str) -> pd.DataFrame:
     '''
@@ -125,24 +205,8 @@ def finbert_sentiment_fill_df(df: pd.DataFrame, text_col: str, device:str) -> pd
     return copy_df
 
 
-
-
-#===================================
-#  BERT Base SST-2 (General Purpose)
-#===================================
-def sst2_sentiment_fill_df(df: pd.DataFrame, text_col: str, device: str) -> pd.DataFrame:
-    tokenizer_sst2 = AutoTokenizer.from_pretrained('textattack/bert-base-uncased-SST-2')
-    model_sst2 = AutoModelForSequenceClassification.from_pretrained('textattack/bert-base-uncased-SST-2')
-
-    copy_df = df.copy()
-    copy_df[['sst2_pos', 'sst2_neg', 'sst2_stmt_score', 'sst2_stmt_label']] = (
-        copy_df[text_col].apply(lambda x: calc_sentiment(x, tokenizer_sst2, model_sst2, model_name='sst2', device=device)).apply(pd.Series)
-    )
-    return copy_df
-
-
 #=========================================================
-# DeBERTa-v3 (State-of-the-Art) higher accuracy but larger
+# DeBERTa (State-of-the-Art) higher accuracy but larger
 #=========================================================
 tokenizer_deberta = AutoTokenizer.from_pretrained('microsoft/deberta-v3-base')
 model_deberta = AutoModelForSequenceClassification.from_pretrained('microsoft/deberta-v3-base')
@@ -182,6 +246,10 @@ def calc_sentiment_roberta(text: str, tokenizer, model, device):
     
     return pd.Series([pos_prob, neg_prob, neu_prob, score, label])
 
+#=========
+# RoBERTa
+#=========
+
 def roberta_sentiment_fill_df(df: pd.DataFrame, text_col: str, device:str) -> pd.DataFrame:
     '''
     This function takes a DataFrame and a column name containing text data, and returns a new DataFrame
@@ -211,76 +279,6 @@ def roberta_sentiment_fill_df(df: pd.DataFrame, text_col: str, device:str) -> pd
         .apply(pd.Series)
     )
     return copy_df
-
-
-#=========================================================
-# Ollama
-#=========================================================
-
-def process_news_data(data: pd.DataFrame, ticker_list: List[str]) -> pd.DataFrame:
-    # Precompute the set for fast membership testing
-    ticker_set = set(ticker_list)
-    
-    # Filter out rows where any key column is empty using vectorized string operations
-    mask = (
-        (data['tickers_all'].astype(str).str.strip() != '' )&
-        (data['description'].astype(str).str.strip() != '') &
-        (data['title'].astype(str).str.strip() != '')
-    )
-    data = data[mask].copy()
-    
-    # Convert tickers_all to uppercase and split on '/'
-    data['tickers_all'] = data['tickers_all'].str.upper().str.split('/')
-    
-    # Cache the subset check result for repeated ticker lists
-    cache = {}
-    def is_valid_tickers(tickers):
-        key = tuple(tickers)  # Use tuple as a hashable cache key
-        if key not in cache:
-            cache[key] = set(tickers).issubset(ticker_set)
-        return cache[key]
-    
-    # Apply the cached subset check. List comprehensions are often faster than apply.
-    valid_mask = [is_valid_tickers(tickers) for tickers in data['tickers_all']]
-    data = data[valid_mask]
-    
-    return data
-
-def get_news_data(user_name:str, pwd:str, 
-                  start_date: datetime, end_date: datetime):
-    client = Client(
-        CLICKHOUSE_HOST,
-        user=user_name,
-        password=pwd,
-        database='tiingo'
-    )
-
-    start_date = start_date.strftime('%Y-%m-%d')
-    end_date = end_date.strftime('%Y-%m-%d')
-
-    sql = f"""
-    select distinct(id), description, tickers_all, title, parseDateTimeBestEffort(publishedDate) AS date 
-    from news
-    where date >= '{start_date}'
-    and date < '{end_date}'
-    """
-
-    res = fetch_database(client, sql)
-    news_data = pd.DataFrame(res, columns=['id', 'description', 'tickers_all', 'title', 'date'])
-    return news_data
-
-def run_model(data, model, device):
-    if model == 'finbert':
-        results = finbert_sentiment_fill_df(data, text_col='title', device=device)
-        results = results[['id', 'finbert_pos', 'finbert_neg', 'finbert_neu', 'finbert_stmt_score', 'finbert_stmt_label']]
-        return results
-    elif model == 'roberta':
-        results =  roberta_sentiment_fill_df(data, text_col='title', device=device)
-        results = results[['id', 'roberta_pos', 'roberta_neg', 'roberta_neu', 'roberta_stmt_score', 'roberta_stmt_label']]
-        return results
-    
-    else:
-        return None
 
 
 def main():
