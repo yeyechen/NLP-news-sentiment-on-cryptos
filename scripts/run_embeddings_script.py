@@ -7,11 +7,65 @@ from clickhouse_driver import Client
 import numpy as np
 import json
 import os
+from transformers import AutoModel
 
 import requests
 import time
 
-def run_miniLM_embedding(df: pd.DataFrame, api_token: str, batch_size=10, max_retries=3) -> None:
+
+
+JINA_MODEL = AutoModel.from_pretrained("jinaai/jina-embeddings-v3", trust_remote_code=True)
+
+data_path = '../Mikey_data/'
+if os.path.exists(data_path):
+    os.chdir(data_path)
+    print('Changed directory to data path:', os.getcwd())
+else:
+    print('Data path does not exist:', data_path)
+
+with open('credentials.json', 'r') as file:
+    credentials = json.load(file)
+
+DB_SERVER_NAME = credentials['clickhouse']['server_name']
+DB_USERNAME = credentials['clickhouse']['username']
+DB_PASSWORD = credentials['clickhouse']['password']
+
+MISTRAL_API = credentials['api_key']['mistral']
+HUGGINGFACE_API = credentials['api_key']['huggingface_daniel']
+
+
+def run_jina_embedding(df: pd.DataFrame, text_column: str = "description", batch_size: int = 50, truncate_dim: int = 1024) -> pd.DataFrame:
+    """
+    Compute embeddings for texts in a DataFrame using the locally installed Jina AI model.
+    The DataFrame is processed in batches, and results are assigned slice-wise.
+    
+    Args:
+        df (pd.DataFrame): DataFrame containing the news data.
+        text_column (str): Column name containing the text to embed (default "description").
+        batch_size (int): Number of rows to process per batch (default 50).
+        truncate_dim (int): Truncation dimension to be used in model.encode (default 1024).
+    
+    Returns:
+        pd.DataFrame: The original DataFrame with a new column "jina_embeddings"
+                      storing the embedding vectors.
+    """
+    # Initialize a new column for embeddings
+    df["jina_embeddings"] = None
+    
+    # Process DataFrame in batches
+    for start_idx in tqdm(range(0, len(df), batch_size)):
+        end_idx = min(start_idx + batch_size, len(df))
+        batch_texts = df.loc[start_idx:end_idx-1, text_column].tolist()
+        
+        # Compute embeddings for the batch
+        embedding_output = JINA_MODEL.encode(batch_texts, truncate_dim=truncate_dim)
+        
+        for i, embedding in enumerate(embedding_output):
+            df.loc[start_idx + i, "jina_embeddings"] = str(embedding)
+    
+    return df
+
+def run_miniLM_embedding(df: pd.DataFrame, api_token=HUGGINGFACE_API, batch_size=10, max_retries=3) -> None:
     """
     Process text embeddings in batches using the sentence-transformers/all-MiniLM-L6-v2 model.
     
@@ -63,7 +117,7 @@ def run_miniLM_embedding(df: pd.DataFrame, api_token: str, batch_size=10, max_re
                 continue
 
 
-def run_mistral_embedding(df: pd.DataFrame, api_key, model: str = 'mistral-embed', batch_size: int = 50) -> None:
+def run_mistral_embedding(df: pd.DataFrame, api_key=MISTRAL_API, model: str = 'mistral-embed', batch_size: int = 50) -> None:
     '''
     Given the news dataframe, append the new column with mistral embeddings values (list cast to str, for now)
     Be reminded that this function is inplace, modifying the df directly.
@@ -107,6 +161,7 @@ def fetch_news_data(host: str, user: str, password: str) -> pd.DataFrame:
                 parseDateTimeBestEffort(publishedDate) AS date 
         FROM tiingo.news
         WHERE (ticker in ('btc', 'eth', 'doge', 'sol') OR LOWER(tags) like '%crypto%')
+        AND LENGTH(description) >= 12
         AND LENGTH(description) <= 8192
         AND date >= '2018-01-01'
         AND description != ''
@@ -123,6 +178,7 @@ def fetch_news_data(host: str, user: str, password: str) -> pd.DataFrame:
                 parseDateTimeBestEffort(publishedDate) AS date 
         FROM tiingo.news
         WHERE ticker = 'btc'
+        AND LENGTH(description) >= 12
         AND date >= '2018-01-01'
         AND description != ''
         AND description != ' '
@@ -130,6 +186,15 @@ def fetch_news_data(host: str, user: str, password: str) -> pd.DataFrame:
 
     # Fetch the result directly as a pandas DataFrame
     return client.query_dataframe(query_btc)
+
+
+def fetch_additional_news_data(filename: str)-> pd.DataFrame:
+    df = pd.read_csv(filename)
+    df.rename(columns={'title': 'description', 'newsDatetime': 'date'}, inplace=True)
+    df['date'] = pd.to_datetime(df['date'], errors='coerce')
+    # df = df[df['date'] >= '2024-01-01']
+    df = df.dropna(subset=['description'])
+    return df
 
 def main():
     parser = argparse.ArgumentParser()
@@ -140,36 +205,70 @@ def main():
     parser.add_argument('-k', '--api_key', help="Mistral API key")
     parser.add_argument('--model', help="Model name", default='mistral-embed')
 
-    data_path = '../Mikey_data/'
-    if os.path.exists(data_path):
-        os.chdir(data_path)
-        print('Changed directory to data path:', os.getcwd())
-    else:
-        print('Data path does not exist:', data_path)
-
-    with open('credentials.json', 'r') as file:
-        credentials = json.load(file)
-
-    db_server_name = credentials['clickhouse']['server_name']
-    db_username = credentials['clickhouse']['username']
-    db_password = credentials['clickhouse']['password']
-
-    mistral_api = credentials['api_key']['mistral']
-    huggingface_api = credentials['api_key']['huggingface2']
-
     # Parse the arguments
     args = parser.parse_args()
 
-    news_df = fetch_news_data(db_server_name, db_username, db_password)
+
+    # news_df = fetch_news_data(db_server_name, db_username, db_password)
+    news_df = fetch_additional_news_data('news_currencies_source_joinedResult.csv')
     news_df = news_df.drop_duplicates(subset=['id']).reset_index(drop=True)
 
-    if args.model == 'mistral':
-        run_mistral_embedding(news_df, api_key=mistral_api, model='mistral-embed')
-        news_df[['id', 'mistral_embeddings']].to_parquet('mistral_embeddings.parquet', index=False)
-
+    model_func = None
+    col_name = None
+    if args.model == 'jina':
+        model_func = run_jina_embedding
+        col_name = 'jina_embeddings'
+    elif args.model == 'mistral':
+        model_func = run_mistral_embedding
+        col_name = 'mistral_embeddings'
     elif args.model == 'miniLM':
-        run_miniLM_embedding(news_df, api_token=huggingface_api)
-        news_df[['id', 'miniLM_embeddings']].to_parquet('miniLM_embeddings_btc_only.parquet', index=False)
+        model_func = run_miniLM_embedding
+        col_name = 'miniLM_embeddings'
+
+    # Create a new folder if it does not exist
+    output_folder = f"{args.model}_additional_data_embeddings"
+
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+        print(f"Created folder: {output_folder}")
+    else:
+        print(f"Folder already exists: {output_folder}")
+
+    os.chdir(output_folder)
+    print('Changed directory to output folder:', os.getcwd())
+    
+    # Group the dataframe by year and month
+    news_df['year_month'] = news_df['date'].dt.strftime('%Y-%m')
+    
+    # Get unique year-month combinations
+    month_groups = sorted(news_df['year_month'].unique())
+    
+    print(f"Processing {len(month_groups)} monthly groups")
+    
+    # Process each month separately
+    for ym in month_groups:
+        print(f"Processing month: {ym}")
+        
+        # Filter data for this month
+        month_df = news_df[news_df['year_month'] == ym].copy()
+        month_df.reset_index(drop=True, inplace=True)
+        
+        # Skip if no data
+        if len(month_df) == 0:
+            print(f"No data for month {ym}, skipping...")
+            continue
+            
+        print(f"Found {len(month_df)} records for {ym}")
+        
+        # Generate embeddings for this month's data
+        model_func(month_df)
+        
+        # Save to a month-specific file
+        output_filename = f'{col_name}_additional_news{ym}.parquet'
+        month_df[['id', col_name]].to_parquet(output_filename, index=False)
+        print(f"Saved embeddings to {output_filename}")
+    
+    print("Done")
 
 if __name__ == '__main__':
     main()
